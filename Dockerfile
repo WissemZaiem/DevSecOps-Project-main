@@ -1,8 +1,13 @@
-FROM node:16.17.0-alpine as builder
-WORKDIR /app
-COPY ./package.json .
-COPY ./yarn.lock .
-RUN yarn install
+# Set yarn network timeout and retry configuration
+RUN yarn config set network-timeout 300000
+RUN yarn config set registry https://registry.npmjs.org/
+
+# Retry yarn install with better error handling
+RUN for i in 1 2 3; do \
+    yarn install --network-timeout 300000 && break || \
+    (echo "Yarn install attempt $i failed, retrying..." && sleep 10); \
+    done
+
 COPY . .
 ARG TMDB_V3_API_KEY
 ENV VITE_APP_TMDB_V3_API_KEY=${TMDB_V3_API_KEY}

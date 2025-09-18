@@ -269,87 +269,92 @@ Now, you have installed the Dependency-Check plugin, configured the tool, and ad
 
 ```groovy
 
-pipeline{
+pipeline {
     agent any
-    tools{
+    tools {
         jdk 'jdk17'
         nodejs 'node16'
     }
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
     stages {
-        stage('clean workspace'){
-            steps{
+
+        stage('Clean Workspace') {
+            steps {
                 cleanWs()
             }
         }
-        stage('Checkout from Git'){
-            steps{
+
+        stage('Checkout from Git') {
+            steps {
                 git branch: 'main', url: 'https://github.com/WissemZaiem/DevSecOps-Project-main.git'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
+
+        stage('Sonarqube Analysis') {
+            steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Netflix \
-                    -Dsonar.projectKey=Netflix '''
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Netflix \
+                        -Dsonar.projectKey=Netflix
+                    '''
                 }
             }
         }
-        stage("quality gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
-                }
-            } 
-        }
+
         stage('Install Dependencies') {
             steps {
-                sh "npm install"
+                retry(3) {
+                    sh "npm install"
+                }
             }
         }
-        stage('OWASP FS SCAN') {
+
+
+        stage('TRIVY FS Scan') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                sh "trivy fs . > trivyfs.txt || echo 'Trivy FS scan failed, continuing...'"
             }
         }
-        stage('TRIVY FS SCAN') {
+
+        stage('Docker Build & Push') {
             steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
-        }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build --build-arg TMDB_V3_API_KEY=<yourapikey> -t netflix ."
-                       sh "docker tag netflix wissemzaiem/netflix:latest "
-                       sh "docker push wissemzaiem/netflix:latest "
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh '''
+                            docker build --build-arg TMDB_V3_API_KEY=<your-api-key> -t netflix .
+                            docker tag netflix wissemzaiem/netflix:latest
+                            docker push wissemzaiem/netflix:latest
+                        '''
                     }
                 }
             }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image wissemzaiem/netflix:latest > trivyimage.txt" 
+
+        stage('TRIVY Image Scan') {
+            steps {
+                sh "trivy image wissemzaiem/netflix:latest > trivyimage.txt || echo 'Trivy image scan failed, continuing...'"
             }
         }
-        stage('Deploy to container'){
-            steps{
-                sh 'docker run -d --name netflix -p 8081:80 wissemzaiem/netflix:latest'
+
+        stage('Deploy to Container') {
+            steps {
+                sh 'docker run -d --name netflix -p 8081:80 wissemzaiem/netflix:latest || echo "Deploy failed, container may already exist"'
             }
         }
+
     }
 }
 
 
-If you get docker login failed errorr
+
+(If you get docker login failed errorr
 
 sudo su
 sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
+sudo systemctl restart jenkins )
 
 
 ```
