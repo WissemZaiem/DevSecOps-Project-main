@@ -268,6 +268,9 @@ Certainly, here are the instructions without step numbers:
 Now, you have installed the Dependency-Check plugin, configured the tool, and added Docker-related plugins along with your DockerHub credentials in Jenkins. You can now proceed with configuring your Jenkins pipeline to include these tools and credentials in your CI/CD process.
 
 ```groovy
+before running the following pipeline in jenkins, please run the following commands:
+chmod o+r /home/<user-name>/DevSecOps-Project-main/Dockerfile
+chmod o+x /home/<user-name>
 
 pipeline {
     agent any
@@ -312,10 +315,25 @@ pipeline {
             }
         }
 
-
         stage('TRIVY FS Scan') {
             steps {
                 sh "trivy fs . > trivyfs.txt || echo 'Trivy FS scan failed, continuing...'"
+            }
+        }
+
+        // <-- New stage to ensure Dockerfile is fresh
+        stage('Prepare Dockerfile') {
+            steps {
+                sh '''
+                    echo "Current directory:"
+                    pwd
+                    echo "Listing files:"
+                    ls -la
+
+                    echo "Copying Dockerfile from DevSecOps-Project-main..."
+                    cp /home/<user-name>/DevSecOps-Project-main/Dockerfile ./Dockerfile
+                    
+                '''
             }
         }
 
@@ -347,6 +365,7 @@ pipeline {
 
     }
 }
+
 
 
 
